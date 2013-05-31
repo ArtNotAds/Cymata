@@ -6,12 +6,10 @@
  
  May, 2013
  
- This release uses these libraries: Hemesh for 3D visualization, Minim for sound analysis, and Nervous System's OBJ export.
- The sound analysis is working live off of an imported file - can be configured to respond to line-in. 
+ This release uses these libraries: Hemesh for 3D visualization, Minim for sound analysis, and ControlP5.
+ The sound analysis is working live off line-in. 
  
- Pressing 'k' plays the sound file.
- 
- Still experimenting with configuring hemesh and exporting 3D files. Will be adding some interface elements in the near future. 
+ 3 sliders control the sensitivity of the audio to x,y,z arrays for the shape.
  
 */
 
@@ -19,6 +17,7 @@ import ddf.minim.*;
 import ddf.minim.signals.*;
 import ddf.minim.analysis.*;
 import ddf.minim.effects.*;
+import ddf.minim.analysis.*;
 
 import wblut.math.*;
 import wblut.processing.*;
@@ -26,50 +25,64 @@ import wblut.core.*;
 import wblut.hemesh.*;
 import wblut.geom.*;
 
+import controlP5.*;
 
-import ddf.minim.analysis.*;
 import processing.opengl.*;
-import nervoussystem.obj.*;
+
 
 Minim minim; 
 AudioPlayer player;
 AudioInput in;
-AudioSample kick;
-FFT fft;    
+FFT fft;
+
+ControlP5 cp5;
 
 HE_Mesh mesh;
 HE_Mesh modifiedMesh;
 WB_Render render;
 WB_Plane P;
 
-float depth = -1000;
+float depth = -2000;
 
-boolean record = false;
+int xValue;
+int yValue;
+int zValue;
 
 void setup() {
   size(1000, 1000, OPENGL);
-  minim = new Minim(this);
-  //in = minim.getLineIn(Minim.STEREO, 1024);
-  kick = minim.loadSample("Pylons.mp3", 1024);
-  fft = new FFT(kick.bufferSize(), kick.sampleRate());
+  hint(ENABLE_OPENGL_4X_SMOOTH);
   smooth();
-  //background(255);
+  
+  // Control P5 Setup
+  cp5 = new ControlP5(this);
+  cp5.setAutoDraw(false);
+  xValue = 3;
+  yValue = 3;
+  zValue = 3;
+  Slider s1=cp5.addSlider("xValue", 3, 20, 20, 60, 20, 200);
+  Slider s2=cp5.addSlider("yValue", 3, 20, 80, 60, 20, 200);
+  Slider s3=cp5.addSlider("zValue", 3, 20, 140, 60, 20, 200);
+ 
+  // Minim setup
+  minim = new Minim(this);
+  in = minim.getLineIn(Minim.STEREO, 1024);
+  fft = new FFT(in.bufferSize(), in.sampleRate());
+  
+  
+  
+  
 }
 
 void draw() {
   background(0);
-   lights();
-   
-   // OBJ recording
-   if (record) {
-    beginRecord("nervoussystem.obj.OBJExport", "filename-####.obj"); 
-  } 
-   //audio calling & limits
-  fft.forward(kick.mix);
+  lights();
+  cp5.draw();
+  //audio calling & limits
+  fft.forward(in.mix);
   fft.window(FFT.HAMMING);
   float threshold = 100;
-  float leftLevel = kick.left.level();
-  float rightLevel = byte(kick.right.level());
+  float leftLevel = in.left.level();
+  float rightLevel = byte(in.right.level());
 
   if (leftLevel > threshold) {              
     leftLevel = threshold;
@@ -103,9 +116,9 @@ void draw() {
      
     //Do something with the vertices, x, y, z
     for(int i=0;i<mesh.numberOfVertices();i++){
-     vertices[i][0]*=2+2*cos(HALF_PI/100*i+HALF_PI); 
-     vertices[i][1]*=2+2*sin(HALF_PI/10*i+QUARTER_PI);
-     vertices[i][2]*=2+2*cos(HALF_PI/10*i);
+     vertices[i][0]*=xValue+2*cos(noise(HALF_PI/10*cos(i)*QUARTER_PI)); 
+     vertices[i][1]*=yValue+2*sin(HALF_PI/100*i*QUARTER_PI);
+     vertices[i][2]*=zValue+100*sin(HALF_PI/10*cos(i)*noise(PI));
     }
      
     //Use the exported faces and vertices as source for a HEC_FaceList
@@ -114,40 +127,32 @@ void draw() {
     
     // End Custom Modifier Parameters
   
-
+  //Render mesh with positioning
+  
   render=new WB_Render(this);
  
   translate(width/2,height/2, depth);
   rotateY(mouseX*1.0f/width*TWO_PI);
   rotateX(mouseY*1.0f/height*TWO_PI);
+  
   noStroke();
   fill(255);
-  //render.drawFaces(mesh);
+  
   render.drawFaces(modifiedMesh);
   stroke(0);
-  //render.drawEdges(mesh);
   //render.drawEdges(modifiedMesh);
-  
-
+ 
 }
 
 void keyPressed()
 {
-  if ( key == 'k' ) kick.trigger();
-  //if (key == 'e')  HET_Export.saveToSTL(modifiedMesh,sketchPath("boom.stl"),1.0);
-  if (key == 'e') record = true;
-  if (key == 'f') {
-    endRecord();
-    record = false;
-  }
+  
 }
 
 void stop()
 {
   // always close Minim audio classes when you are done with them
-  kick.close();
   minim.stop();
-  
   super.stop();
 }
 
